@@ -1,5 +1,5 @@
 # set working directory----
-setwd("your_filepath")
+setwd("/Users/rayrubia/Desktop/Dissertation")
 
 # load libraries (install packages if you haven't yet)----
 library(tidyverse)
@@ -22,7 +22,7 @@ hoverflies_long <- gather(hoverflies_sex_matrix, Species, Count, c(6:58))
 hoverflies_long_no_zeros<- filter(hoverflies_long, Count > 0)
 
 # save dataframe
-write.csv(hoverflies_long_no_zeros,"your_filepath/Data/hoverfly_abundance_sex.csv")
+write.csv(hoverflies_long_no_zeros,"/Users/rayrubia/Desktop/Dissertation/Data/hoverfly_abundance_sex.csv")
 
 # import dataset edited on Excel (combined male and female counts for each species) for biodiversity calculations
 hoverfly_abundance <- read.csv("Data/hoverfly_abundance.csv")
@@ -35,7 +35,7 @@ hoverflies_abundance_wide[is.na(hoverflies_abundance_wide)] <- 0
 
 # save dataset for easy access later- will manually add pantraps with zero hoverfly abundance in Excel
 # note you do not have to do this, you can find the completed matrix in the data folder
-write.csv(hoverflies_abundance_wide,"your_filepath/Data/species_matrix_incomplete.csv")
+write.csv(hoverflies_abundance_wide,"/Users/rayrubia/Desktop/Dissertation/Data/species_matrix_incomplete.csv")
 
 # hoverfly diversity calculations----
 # import species matrix NOT divided by sex
@@ -65,7 +65,7 @@ hoverfly_diversity$hoverfly_shannon <- shannon$hoverfly_shannon # extract column
 hoverfly_diversity$hoverfly_abundance <- hoverfly_abundance_pantrap$hoverfly_abundance
 
 # export dataset for sorting in Excel----
-write.csv(hoverfly_diversity,"your_filepath/Data/hoverfly_diversity_incomplete.csv")
+write.csv(hoverfly_diversity,"/Users/rayrubia/Desktop/Dissertation/Data/hoverfly_diversity_incomplete.csv")
 # data is exported as "incomplete" because data needs sorting in Excel and functional diversity/community weighted mean
 # values calculated in Excel need to be added to the "hoverfly_diversity" data set for statistical analysis
 
@@ -122,7 +122,7 @@ flower_diversity$flower_abundance_2m <- flower_abundance$flower_abundance_2m
 # export dataset to average in and out diversity measurements for each pan trap 
 # to create one global diversity value for each pan trap
 # This will be done in Microsoft Excel and compiled with hoverfly diversity data for stats
-write.csv(flower_diversity,"your_filepath/Data/flower_diversity_incomplete.csv")
+write.csv(flower_diversity,"/Users/rayrubia/Desktop/Dissertation/Data/flower_diversity_incomplete.csv")
 
 
 # prepare dataset for analysis of hedgerow quality----
@@ -155,7 +155,7 @@ hoverfly_diversity_transect$hoverfly_shannon <- shannon_transect$hoverfly_shanno
 hoverfly_diversity_transect$hoverfly_abundance <- hoverfly_abundance_transect$hoverfly_abundance
 
 # export dataset for sorting in Excel----
-write.csv(hoverfly_diversity_transect,"your_filepath/Data/hoverfly_hedgerow_incomplete.csv")
+write.csv(hoverfly_diversity_transect,"/Users/rayrubia/Desktop/Dissertation/Data/hoverfly_hedgerow_incomplete.csv")
 # data is exported as "incomplete" because data needs sorting in Excel and functional diversity/community weighted mean
 # values calculated in Excel need to be added to the "hoverfly_hedgerow" data set for statistical analysis
 

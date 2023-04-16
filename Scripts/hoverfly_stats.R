@@ -9,7 +9,7 @@
 ##%######################################################%########
 
 # set working directory----
-setwd("your_filepath")
+setwd("/Users/rayrubia/Desktop/Dissertation")
 
 # load libraries (install the packages if you haven't yet)----
 library(tidyverse) # for efficient data manipulation and visualization, contains ggplot2, dplyr and tidyr packages
@@ -26,7 +26,7 @@ library(FSA) # for post hoc comparisons of Kruskal wallis test using Dunn test
 library(MASS) # for negative binomial regression
 library(glmmTMB) # generate zero-inflated mixed models
 library(DHARMa) # allows for zero-inflation testing
-library(lsmeans) # for post hoc comparisons of glmmTMB models
+library(multcomp) # for post hoc comparisons of glmmTMB models
 library(rcompanion) # for plots using medians and 95% CI
 
 
@@ -51,7 +51,7 @@ hoverflies$flower_diversity <- as.factor(ifelse(hoverflies$flower_shannon >= 0.7
 
 # make other variables factors for statistical analyses
 hoverflies_hedgerow$Farm <- as.factor(hoverflies_hedgerow$Farm)
-hoverflies$ Farm <- as.factor(hoverflies$Farm)
+hoverflies$Farm <- as.factor(hoverflies$Farm)
 
 # RQ1 Analysis----
 # How does farmland floral diversity affect hoverfly communities?
@@ -80,11 +80,19 @@ plot(shannon_mod, which = 2)
 
 # see if we have independent data points
 boxplot(hoverfly_shannon ~ Farm, data = hoverflies)  # could be something going on (grouped per farm)
+boxplot(hoverfly_shannon ~ Month, data = hoverflies)  
 
 # split data by farm
 (split_plot <- ggplot(aes(flower_shannon, hoverfly_shannon), data = hoverflies) + 
     geom_point() + 
     facet_wrap(~ Farm) + 
+    xlab("Floral Shannon") + 
+    ylab("Hoverfly Shannon"))
+
+# by month
+(split_plot <- ggplot(aes(flower_shannon, hoverfly_shannon), data = hoverflies) + 
+    geom_point() + 
+    facet_wrap(~ Month) + 
     xlab("Floral Shannon") + 
     ylab("Hoverfly Shannon"))
 
@@ -100,13 +108,14 @@ hoverflies$Transect <- as.factor(hoverflies$Transect)
 hoverflies <- within(hoverflies, hedgerow <- factor(Farm:Transect))
 
 # build model
-shannon.lmer <- lmer(hoverfly_shannon ~ flower_shannon + (1|Farm) + (1|hedgerow), data = hoverflies)
+shannon.lmer <- lmer(hoverfly_shannon ~ flower_shannon + (1|Month) + (1|Farm) + (1|hedgerow), data = hoverflies)
 summary(shannon.lmer)
 
 # check model assumptions with diagnostic plots
 plot(shannon.lmer)
 qqnorm(resid(shannon.lmer))
 qqline(resid(shannon.lmer)) 
+shapiro.test(resid(shannon.lmer))
 
 # ASSUMPTIONS VIOLATED
 
@@ -232,6 +241,7 @@ AIC(poisson_model, shannonabundance.nb, shannonabundance.zi)
 
 # check if data points are independent
 boxplot(hoverfly_abundance ~ Farm, data = hoverflies)  # could be something going on (grouped per farm)
+boxplot(hoverfly_abundance ~ Month, data = hoverflies)
 
 # split data by farm
 (split_plot <- ggplot(aes(flower_shannon, hoverfly_abundance), data = hoverflies) + 
@@ -239,24 +249,35 @@ boxplot(hoverfly_abundance ~ Farm, data = hoverflies)  # could be something goin
     facet_wrap(~ Farm) + 
     xlab("Floral Shannon") + 
     ylab("Hoverfly Abundance"))
+# by month
+(split_plot <- ggplot(aes(flower_shannon, hoverfly_abundance), data = hoverflies) + 
+    geom_point() + 
+    facet_wrap(~ Month) + 
+    xlab("Floral Shannon") + 
+    ylab("Hoverfly Abundance"))
 
 # we can see that different farms have different floral diversities and hoverfly abundance,
-# indicating that sites are not independent and we must include farm and transect as nested random effects
+# indicating that sites are not independent and we must include farm and transect as nested random effects and month as a temporal effect
 
 # need to add sampling design into models (note: hedgerow is Farm + transect which we previously combined earlier wehn trying to fit a mixed effects model)
 
 # in the negative binomial model
-shannonabundance_mixed.nb <- glmmTMB(hoverfly_abundance ~ flower_shannon + (1|Farm) + (1|hedgerow), family = "nbinom2", data = hoverflies)
+shannonabundance_mixed.nb <- glmmTMB(hoverfly_abundance ~ flower_shannon + (1|Month) + (1|Farm) + (1|hedgerow), family = "nbinom2", data = hoverflies)
 
 # in the zero inflated model
-shannonabundance_mixed.zi <- glmmTMB(hoverfly_abundance ~ flower_shannon + (1|Farm) + (1|hedgerow), ziformula = ~flower_shannon, family = "nbinom2", data = hoverflies)
-# this model doesn't converge, so ignore
+shannonabundance_mixed.zi <- glmmTMB(hoverfly_abundance ~ flower_shannon + (1|Month) + (1|Farm) + (1|hedgerow), ziformula = ~flower_shannon, family = "nbinom2", data = hoverflies)
 
 # also add random effects to see if they affect the generation process of structural zeros
-shannonabundance_mixed2.zi <- glmmTMB(hoverfly_abundance ~ flower_shannon + (1|Farm) + (1|hedgerow), ziformula = ~flower_shannon + (1|Farm) + (1|hedgerow), family = "nbinom2", data = hoverflies)
+shannonabundance_mixed2.zi <- glmmTMB(hoverfly_abundance ~ flower_shannon + (1|Month) + (1|Farm) + (1|hedgerow), ziformula = ~flower_shannon + (1|Month) + (1|Farm) + (1|hedgerow), family = "nbinom2", data = hoverflies)
+
+# change optimiser
+shannonabundance_mixed2.zib <- update(shannonabundance_mixed2.zi,
+                              control=glmmTMBControl(optimizer=optim,
+                                                     optArgs=list(method="BFGS")))
+# does not converge so ignore
 
 # assess model fit
-AIC(shannonabundance_mixed.nb, shannonabundance.nb, shannonabundance_mixed2.zi, shannonabundance.zi)
+AIC(shannonabundance_mixed.nb, shannonabundance.nb, shannonabundance_mixed.zi, shannonabundance.zi)
 # Mixed effect negative binomial model seems to be the best. 
 # random effects have a strong influence on the generation of both sampling and structural zeros (site characteristics), but model fits worse than negative binomial
 # structural zero means site characteristics do not allow for the proliference of hoverflies
@@ -370,6 +391,7 @@ AIC(poisson_model2, abundance.nb, abundance.zi)
 
 # check if data points are independent
 boxplot(hoverfly_abundance ~ Farm, data = hoverflies)  # could be something going on (grouped per farm)
+boxplot(hoverfly_abundance ~ Month, data = hoverflies)
 
 # split data by farm
 (split_plot <- ggplot(aes(flower_abundance, hoverfly_abundance), data = hoverflies) + 
@@ -377,31 +399,36 @@ boxplot(hoverfly_abundance ~ Farm, data = hoverflies)  # could be something goin
     facet_wrap(~ Farm) + 
     xlab("Floral Abundance") + 
     ylab("Hoverfly Abundance"))
+# by month
+(split_plot <- ggplot(aes(flower_abundance, hoverfly_abundance), data = hoverflies) + 
+    geom_point() + 
+    facet_wrap(~ Month) + 
+    xlab("Floral Abundance") + 
+    ylab("Hoverfly Abundance"))
 
 # we can see that different farms have different floral abundances and hoverfly abundances,
-# indicating that sites are not independent and we must include farm and transect as nested random effects
+# indicating that sites are not independent and we must include farm and transect as nested random effects and month as a temporal random effect
 
 # need to add sampling design into models (note: hedgerow is Farm + transect which we previously combined earlier wehn trying to fit a mixed effects model)
 
 # in the negative binomial model
-abundance_mixed.nb <- glmmTMB(hoverfly_abundance ~ flower_abundance + (1|Farm) + (1|hedgerow), family = "nbinom2", data = hoverflies)
+abundance_mixed.nb <- glmmTMB(hoverfly_abundance ~ flower_abundance + (1|Month) + (1|Farm) + (1|hedgerow), family = "nbinom2", data = hoverflies)
 
 # in the zero inflated model
-abundance_mixed.zi <- glmmTMB(hoverfly_abundance ~ flower_abundance + (1|Farm) + (1|hedgerow), ziformula = ~flower_abundance, family = "nbinom2", data = hoverflies)
-# this model doesn't converge, so ignore
+abundance_mixed.zi <- glmmTMB(hoverfly_abundance ~ flower_abundance + (1|Month) + (1|Farm) + (1|hedgerow), ziformula = ~flower_abundance, family = "nbinom2", data = hoverflies)
 
 # also add random effects to see if they affect the generation process of structural zeros
-abundance_mixed2.zi <- glmmTMB(hoverfly_abundance ~ flower_abundance + (1|Farm) + (1|hedgerow), ziformula = ~flower_abundance + (1|Farm) + (1|hedgerow), family = "nbinom2", data = hoverflies)
-# failed to converge
+abundance_mixed2.zi <- glmmTMB(hoverfly_abundance ~ flower_abundance + (1|Month) + (1|Farm) + (1|hedgerow), ziformula = ~flower_abundance + (1|Month) + (1|Farm) + (1|hedgerow), family = "nbinom2", data = hoverflies)
+
 
 # changing the optimiser to help converge
 abundance_mixed2.zib <- update(abundance_mixed2.zi,
                                control=glmmTMBControl(optimizer=optim,
                                                       optArgs=list(method="BFGS")))
-# converges now
+# failed to converge
 
 # assess model fit
-AIC(abundance_mixed.nb, abundance.nb, abundance.zi, abundance_mixed.zi, abundance_mixed2.zib)
+AIC(abundance_mixed.nb, abundance.nb, abundance.zi, abundance_mixed.zi)
 # Mixed effect negative binomial model seems to be the best. 
 # random effects do NOT have a strong influence on the generation of both sampling and structural zeros (site characteristics)
 
@@ -415,7 +442,7 @@ anova(abundance_mixed.nb, abundance.nb)
 
 # see findings using best model- mixed effect negative binomial
 summary(abundance_mixed.nb)
-# found that flower abundance affects hoverfly abundance
+# found that flower abundance does not affect hoverfly abundance
 # can look at estimates to determine the ecological implications of our findings (need to do exp(estimate) to undo log transformation in each term (intercept and fixed effect) and compare)
 
 # visualize
@@ -521,11 +548,18 @@ AIC(poisson_model3, shannonrichness.nb, shannonrichness.zib)
 
 # check if data points are independent
 boxplot(hoverfly_richness ~ Farm, data = hoverflies)  # could be something going on (grouped per farm)
+boxplot(hoverfly_richness ~ Month, data = hoverflies)
 
 # split data by farm
 (split_plot <- ggplot(aes(flower_shannon, hoverfly_richness), data = hoverflies) + 
     geom_point() + 
     facet_wrap(~ Farm) + 
+    xlab("Floral Shannon") + 
+    ylab("Hoverfly Richness"))
+# by month
+(split_plot <- ggplot(aes(flower_shannon, hoverfly_richness), data = hoverflies) + 
+    geom_point() + 
+    facet_wrap(~ Month) + 
     xlab("Floral Shannon") + 
     ylab("Hoverfly Richness"))
 
@@ -535,13 +569,18 @@ boxplot(hoverfly_richness ~ Farm, data = hoverflies)  # could be something going
 # need to add sampling design into models (note: hedgerow is Farm + transect which we previously combined earlier wehn trying to fit a mixed effects model)
 
 # in the negative binomial model
-shannonrichness_mixed.nb <- glmmTMB(hoverfly_richness ~ flower_shannon + (1|Farm) + (1|hedgerow), family = "nbinom2", data = hoverflies)
-
-# in the zero inflated model
-shannonrichness_mixed.zi <- glmmTMB(hoverfly_richness ~ flower_shannon + (1|Farm) + (1|hedgerow), ziformula = ~flower_shannon, family = "nbinom2", data = hoverflies)
+shannonrichness_mixed.nb <- glmmTMB(hoverfly_richness ~ flower_shannon + (1|Month) + (1|Farm) + (1|hedgerow), family = "nbinom2", data = hoverflies)
 
 # change optimizer to help convergence
-shannonrichness_mixed.zib <- update(shannonrichness_mixed.zi,
+shannonrichness_mixed.nb <- update(shannonrichness_mixed.nb,
+                                   control=glmmTMBControl(optimizer=optim,
+                                                          optArgs=list(method="BFGS")))
+# still doesn't converge so just ignore
+# in the zero inflated model
+shannonrichness_mixed.zi <- glmmTMB(hoverfly_richness ~ flower_shannon + (1|Month) + (1|Farm) + (1|hedgerow), ziformula = ~flower_shannon, family = "nbinom2", data = hoverflies)
+
+# change optimizer to help convergence
+shannonrichness_mixed.zi <- update(shannonrichness_mixed.zi,
                               control=glmmTMBControl(optimizer=optim,
                                                      optArgs=list(method="BFGS")))
 # still doesn't converge so just ignore
@@ -554,20 +593,25 @@ shannonrichness_mixed2.zib <- update(shannonrichness_mixed2.zi,
                                                            optArgs=list(method="BFGS")))
 # still doesn't converge so just ignore
 
+# As no models converge, we will take the negative binomial model (fit data best without random effects) and remove different random effects and select best model
+shannonrichness_mixed.nb1 <- glmmTMB(hoverfly_richness ~ flower_shannon + (1|Farm) + (1|hedgerow), family = "nbinom2", data = hoverflies)
+shannonrichness_mixed.nb2 <- glmmTMB(hoverfly_richness ~ flower_shannon + (1|Month) + (1|hedgerow), family = "nbinom2", data = hoverflies)
+shannonrichness_mixed.nb3 <- glmmTMB(hoverfly_richness ~ flower_shannon + (1|Month) + (1|Farm), family = "nbinom2", data = hoverflies)
+
 # assess model fit
-AIC(shannonrichness_mixed.nb, shannonrichness.nb, shannonrichness.zib)
-# Mixed effect negative binomial model seems to be the best. 
+AIC(shannonrichness_mixed.nb1, shannonrichness_mixed.nb2, shannonrichness_mixed.nb3)
+# Mixed effect negative binomial model seems to be the best when including Month and hedgerow as random effects 
 
 # code negative binomial model using glmmTMB rather than glm.nb just to carry out likelihood ratio test
 # to confirm that random effects are needed in the model
 shannonrichness.nb <- glmmTMB(hoverfly_richness ~ flower_shannon, family = "nbinom2", data = hoverflies)
 
 # likelihood ratio test (fixed effects are held constant)
-anova(shannonrichness_mixed.nb, shannonrichness.nb)
+anova(shannonrichness_mixed.nb2, shannonrichness.nb)
 # indeed, random effects do improve model fit
 
 # see findings using best model- mixed effect negative binomial
-summary(shannonrichness_mixed.nb)
+summary(shannonrichness_mixed.nb2)
 # found that flower diversity does not have a significant effect on hoverfly richness
 # can look at estimates to determine the ecological implications of our findings (need to do exp(estimate) to undo log transformation in each term (intercept and fixed effect) and compare)
 # visualize
@@ -666,11 +710,18 @@ AIC(poisson_model4, abundancerichness.nb, abundancerichness.zi)
 
 # check if data points are independent
 boxplot(hoverfly_richness ~ Farm, data = hoverflies)  # could be something going on (grouped per farm)
+boxplot(hoverfly_richness ~ Month, data = hoverflies)
 
 # split data by farm
 (split_plot <- ggplot(aes(flower_shannon, hoverfly_richness), data = hoverflies) + 
     geom_point() + 
     facet_wrap(~ Farm) + 
+    xlab("Floral Abundance") + 
+    ylab("Hoverfly Richness"))
+# by month
+(split_plot <- ggplot(aes(flower_shannon, hoverfly_richness), data = hoverflies) + 
+    geom_point() + 
+    facet_wrap(~ Month) + 
     xlab("Floral Abundance") + 
     ylab("Hoverfly Richness"))
 
@@ -680,22 +731,27 @@ boxplot(hoverfly_richness ~ Farm, data = hoverflies)  # could be something going
 # need to add sampling design into models (note: hedgerow is Farm + transect which we previously combined earlier wehn trying to fit a mixed effects model)
 
 # in the negative binomial model
-abundancerichness_mixed.nb <- glmmTMB(hoverfly_richness ~ flower_abundance + (1|Farm) + (1|hedgerow), family = "nbinom2", data = hoverflies)
+abundancerichness_mixed.nb <- glmmTMB(hoverfly_richness ~ flower_abundance + (1|Month) + (1|Farm) + (1|hedgerow), family = "nbinom2", data = hoverflies)
 
 # in the zero inflated model
-abundancerichness_mixed.zi <- glmmTMB(hoverfly_richness ~ flower_abundance + (1|Farm) + (1|hedgerow), ziformula = ~flower_abundance, family = "nbinom2", data = hoverflies)
+abundancerichness_mixed.zi <- glmmTMB(hoverfly_richness ~ flower_abundance + (1|Month) + (1|Farm) + (1|hedgerow), ziformula = ~flower_abundance, family = "nbinom2", data = hoverflies)
+# change optimizer to aid convergence
+abundancerichness_mixed.zi <- update(abundancerichness_mixed.zi,
+                                       control=glmmTMBControl(optimizer=optim,
+                                                              optArgs=list(method="BFGS")))
+# still does not converge so just ignore
 
 # also add random effects to see if they affect the generation process of structural zeros
-abundancerichness_mixed2.zi <- glmmTMB(hoverfly_richness ~ flower_abundance + (1|Farm) + (1|hedgerow), ziformula = ~flower_abundance + (1|Farm) + (1|hedgerow), family = "nbinom2", data = hoverflies)
+abundancerichness_mixed2.zi <- glmmTMB(hoverfly_richness ~ flower_abundance + (1|Month) + (1|Farm) + (1|hedgerow), ziformula = ~flower_abundance + (1|Month) + (1|Farm) + (1|hedgerow), family = "nbinom2", data = hoverflies)
 
 # change optimizer to aid convergence
-abundancerichness_mixed2.zib <- update(abundancerichness_mixed2.zi,
+abundancerichness_mixed2.zi <- update(abundancerichness_mixed2.zi,
                                      control=glmmTMBControl(optimizer=optim,
                                                             optArgs=list(method="BFGS")))
 # still doesn't converge so just ignore
 
 # assess model fit
-AIC(abundancerichness_mixed.nb, abundancerichness.nb, abundancerichness_mixed.zi, abundancerichness.zi)
+AIC(abundancerichness_mixed.nb, abundancerichness.nb)
 # Mixed effect negative binomial model seems to be the best. 
 
 # code negative binomial model using glmmTMB rather than glm.nb just to carry out likelihood ratio test
@@ -711,7 +767,7 @@ summary(abundancerichness_mixed.nb)
 # found that flower diversity does not have a significant effect on hoverfly richness
 # can look at estimates to determine the ecological implications of our findings (need to do exp(estimate) to undo log transformation in each term (intercept and fixed effect) and compare)
 # visualize
-(first_plot <- ggplot(hoverflies, aes(x = flower_shannon, y = hoverfly_richness)) +
+(first_plot <- ggplot(hoverflies, aes(x = flower_abundance, y = hoverfly_richness)) +
     geom_point() +
     geom_smooth(method = "lm"))
 # Effect of floral diversity on functional diversity----
@@ -824,6 +880,10 @@ boxplot(sex_fd ~ flower_diversity, data = hoverflies)
 # VIOLATES ASSUMPTIONS OF LINEAR MODELS AND LINEAR MIXED MODELS (code not included for practicality, 
 # but if interested, it is the same as the one used to check hoverfly shannon vs flower shannon)
 # do non parametric alternative--> Kendal Theill test
+# see mean sex cwm when we remove zeros caused by zero abundance rather than males
+hoverflies2<-hoverflies[hoverflies$hoverfly_abundance!=0,]
+mean(hoverflies2$sex_cwm)
+
 sexcwm.mod <- mblm(sex_cwm ~ flower_shannon, dataframe=hoverflies, repeated = TRUE)
 summary(sexcwm.mod)
 
@@ -891,7 +951,7 @@ legend("topright", title="Floral Diversity",
        c("High","Low"), fill=c("darkorchid1", "darkslategray1"), horiz=FALSE, cex=.9) # adding a legend
 
 # save plot
-png("your_filepath/floral_nmds_basic.png", width=6, height=5, units = "in", res = 300)
+png("Data/Figures/floral_nmds_basic.png", width=6, height=5, units = "in", res = 300)
 ordiplot(hov.NMDS)
 ordiellipse(hov.NMDS, hoverflies_species$flower_diversity, label = FALSE, 
             col=c("darkorchid1", "darkslategray1"), 
@@ -959,7 +1019,7 @@ for(g in levels(nmds.scores$flower_diversity)){
                        labels = c("High", "Low"), # adjusting legend labels
                        values = c(17, 15))) # customising shapes
 # save plot
-ggsave(filename = "your_filepath/flower_NMDS.png", flower_NMDS_plot, device = "png")
+ggsave(filename = "Data/Figures/flower_NMDS.png", flower_NMDS_plot, device = "png")
 
 # data analysis
 # using a PERMANOVA to test the differences in community composition
@@ -1037,10 +1097,12 @@ lm_resids <- resid(shannonhedge_mod)
 shapiro.test(lm_resids) # shows that residuals are non normally distributed
 bartlett.test(hoverfly_shannon ~ hedgerow_type, data = hoverflies_hedgerow) # shows homoskedasticity (GOOD)
 
-# ASSUMPTIONS VIOLATED
+# ASSUMPTIONS VIOLATED-> NEED to check with ALICE because plot doesn't look horrible
+# and also doesn't have a normal distribution but this might not be an assumption
 
 # see if we have independent data points
 boxplot(hoverfly_shannon ~ Farm, data = hoverflies_hedgerow)  # could be something going on (grouped per farm)
+boxplot(hoverfly_shannon ~ Month, data = hoverflies_hedgerow)
 
 # split data by farm
 (split_plot <- ggplot(aes(hedgerow_type, hoverfly_shannon), data = hoverflies_hedgerow) + 
@@ -1049,15 +1111,21 @@ boxplot(hoverfly_shannon ~ Farm, data = hoverflies_hedgerow)  # could be somethi
     xlab("Hedgerow Type") + 
     ylab("Hoverfly Shannon"))
 
+# by month
+(split_plot <- ggplot(aes(hedgerow_type, hoverfly_shannon), data = hoverflies_hedgerow) + 
+    geom_boxplot() + 
+    facet_wrap(~ Month) + 
+    xlab("Hedgerow Type") + 
+    ylab("Hoverfly Shannon"))
 # we can see that different farms have different hedgerow types and hoverfly diversities,
 # indicating that sites are not independent and we must include farm as a random effect because
 # it affects the diversity~hedgerow type relationship
 
 # mixed effects model
-# include farm as a random effect because different farms have different hedgerows and different hoverfly
-# communities
+# include farm and transect as a random effect because different farms have different hedgerows and different hoverfly
+# communities and month will affect temporal autocorrelation
 # build model
-shannonhedge.lmer <- lmer(hoverfly_shannon ~ hedgerow_type + (1|Farm), data = hoverflies_hedgerow)
+shannonhedge.lmer <- lmer(hoverfly_shannon ~ hedgerow_type + (1|Month) + (1|Farm), data = hoverflies_hedgerow)
 summary(shannonhedge.lmer)
 
 # check model assumptions with diagnostic plots
@@ -1065,6 +1133,7 @@ plot(shannonhedge.lmer)
 qqnorm(resid(shannonhedge.lmer))
 qqline(resid(shannonhedge.lmer)) 
 shapiro.test(resid(shannonhedge.lmer))
+# shapiro test positive but have non-equal variances
 
 # ASSUMPTIONS VIOLATED- not sure, seems quite close to qqline, we could maybe use it
 
@@ -1181,6 +1250,7 @@ AIC(poisson_model5, hedgeabundance.nb, hedgeabundance.zi)
 
 # check if data points are independent
 boxplot(hoverfly_abundance ~ Farm, data = hoverflies_hedgerow)  # could be something going on (grouped per farm)
+boxplot(hoverfly_abundance ~ Month, data = hoverflies_hedgerow)
 
 # split data by farm
 (split_plot <- ggplot(hoverflies_hedgerow, aes(hedgerow_type, hoverfly_abundance)) + 
@@ -1194,29 +1264,37 @@ boxplot(hoverfly_abundance ~ Farm, data = hoverflies_hedgerow)  # could be somet
           panel.grid = element_blank(), # Removing the background grid lines               
           plot.margin = unit(c(1,1,1,1), units = , "cm"), # Adding a margin
           legend.position = "none")) # Removing legend - not needed with only 2 factors
+# by month
+(split_plot <- ggplot(hoverflies_hedgerow, aes(hedgerow_type, hoverfly_abundance)) + 
+    geom_boxplot(aes(fill = hedgerow_type)) +
+    theme_bw() +
+    facet_wrap(~Month) +
+    ylab("Hoverfly Abundance\n") +                             
+    xlab("\nHedgerow Type")  +
+    theme(axis.text = element_text(size = 12),
+          axis.title = element_text(size = 14, face = "plain"),                     
+          panel.grid = element_blank(), # Removing the background grid lines               
+          plot.margin = unit(c(1,1,1,1), units = , "cm"), # Adding a margin
+          legend.position = "none")) # Removing legend - not needed with only 2 factors
 
 
 # we can see that different farms have different hedgerow types and hoverfly abundances,
-# indicating that sites are not independent and we must include farm as a nested random effect
+# indicating that sites are not independent and we must include farm as a nested random effect and month as a temporal random effect
 
 # need to add sampling design into models
 
 # in the negative binomial model
-hedgeabundance_mixed.nb <- glmmTMB(hoverfly_abundance ~ hedgerow_type + (1|Farm), family = "nbinom2", data = hoverflies_hedgerow)
+hedgeabundance_mixed.nb <- glmmTMB(hoverfly_abundance ~ hedgerow_type + (1|Month) + (1|Farm), family = "nbinom2", data = hoverflies_hedgerow)
 
 # in the zero inflated model
-hedgeabundance_mixed.zi <- glmmTMB(hoverfly_abundance ~ hedgerow_type + (1|Farm), ziformula = ~hedgerow_type, family = "nbinom2", data = hoverflies_hedgerow)
+hedgeabundance_mixed.zi <- glmmTMB(hoverfly_abundance ~ hedgerow_type + (1|Month) + (1|Farm), ziformula = ~hedgerow_type, family = "nbinom2", data = hoverflies_hedgerow)
 
 # also add random effects to see if they affect the generation process of structural zeros
-hedgeabundance_mixed2.zi <- glmmTMB(hoverfly_abundance ~ hedgerow_type + (1|Farm), ziformula = ~hedgerow_type + (1|Farm), family = "nbinom2", data = hoverflies_hedgerow)
-# change optimizer to aid convergence
-hedgeabundance_mixed2.zib <- update(hedgeabundance_mixed2.zi,
-                                       control=glmmTMBControl(optimizer=optim,
-                                                              optArgs=list(method="BFGS")))
-# converges now
+hedgeabundance_mixed2.zi <- glmmTMB(hoverfly_abundance ~ hedgerow_type + (1|Month) + (1|Farm), ziformula = ~hedgerow_type + (1|Month) + (1|Farm), family = "nbinom2", data = hoverflies_hedgerow)
+
 
 # assess model fit
-AIC(hedgeabundance.nb, hedgeabundance_mixed.nb, hedgeabundance_mixed.zi, hedgeabundance_mixed2.zib, hedgeabundance.zi)
+AIC(hedgeabundance.nb, hedgeabundance_mixed.nb, hedgeabundance_mixed.zi, hedgeabundance_mixed2.zib)
 # Mixed effect negative binomial model seems to be the best. 
 # random effects also have an effect on the data in the zero inflated model, but negative binomial fits data better
 
@@ -1230,6 +1308,11 @@ anova(hedgeabundance_mixed.nb, hedgeabundance.nb)
 
 # see findings using best model- mixed effect negative binomial
 summary(hedgeabundance_mixed.nb)
+
+# post hoc comparison using multiple comparisons of means, Tukey contrasts
+hedge_abundance_posthoc <- glht(hedgeabundance_mixed.nb, linfct = mcp(hedgerow_type = "Tukey"))
+summary(hedge_abundance_posthoc)
+
 # found that flower diversity does not have a significant effect on hoverfly abundance
 # can look at estimates to determine the ecological implications of our findings (need to do exp(estimate) to undo log transformation in each term (intercept and fixed effect) and compare)
 # visualize
@@ -1343,12 +1426,25 @@ AIC(poisson_model6, hedgerichness.nb, hedgerichness.zi)
 
 # check if data points are independent
 boxplot(hoverfly_richness ~ Farm, data = hoverflies_hedgerow)  # could be something going on (grouped per farm)
+boxplot(hoverfly_richness ~ Month, data = hoverflies_hedgerow)
 
 # split data by farm
 (split_plot <- ggplot(hoverflies_hedgerow, aes(hedgerow_type, hoverfly_richness)) + 
     geom_boxplot(aes(fill = hedgerow_type)) +
     theme_bw() +
     facet_wrap(~Farm) +
+    ylab("Hoverfly Richness\n") +                             
+    xlab("\nHedgerow Type")  +
+    theme(axis.text = element_text(size = 12),
+          axis.title = element_text(size = 14, face = "plain"),                     
+          panel.grid = element_blank(), # Removing the background grid lines               
+          plot.margin = unit(c(1,1,1,1), units = , "cm"), # Adding a margin
+          legend.position = "none")) # Removing legend - not needed with only 2 factors
+# by month
+(split_plot <- ggplot(hoverflies_hedgerow, aes(hedgerow_type, hoverfly_richness)) + 
+    geom_boxplot(aes(fill = hedgerow_type)) +
+    theme_bw() +
+    facet_wrap(~Month) +
     ylab("Hoverfly Richness\n") +                             
     xlab("\nHedgerow Type")  +
     theme(axis.text = element_text(size = 12),
@@ -1364,15 +1460,10 @@ boxplot(hoverfly_richness ~ Farm, data = hoverflies_hedgerow)  # could be someth
 # need to add sampling design into models
 
 # in the negative binomial model
-hedgerichness_mixed.nb <- glmmTMB(hoverfly_richness ~ hedgerow_type + (1|Farm), family = "nbinom2", data = hoverflies_hedgerow)
-# change optimizer to aid convergence
-hedgerichness_mixed.nb2 <- update(hedgerichness_mixed.nb,
-                                    control=glmmTMBControl(optimizer=optim,
-                                                           optArgs=list(method="BFGS")))
-# converges now
+hedgerichness_mixed.nb <- glmmTMB(hoverfly_richness ~ hedgerow_type + (1|Month) + (1|Farm), family = "nbinom2", data = hoverflies_hedgerow)
 
 # in the zero inflated model
-hedgerichness_mixed.zi <- glmmTMB(hoverfly_richness ~ hedgerow_type + (1|Farm), ziformula = ~hedgerow_type, family = "nbinom2", data = hoverflies_hedgerow)
+hedgerichness_mixed.zi <- glmmTMB(hoverfly_richness ~ hedgerow_type + (1|Month) + (1|Farm), ziformula = ~hedgerow_type, family = "nbinom2", data = hoverflies_hedgerow)
 
 # change optimizer to aid convergence
 hedgerichness_mixed.zib <- update(hedgerichness_mixed.zi,
@@ -1381,7 +1472,7 @@ hedgerichness_mixed.zib <- update(hedgerichness_mixed.zi,
 # converges now
 
 # also add random effects to see if they affect the generation process of structural zeros
-hedgerichness_mixed2.zi <- glmmTMB(hoverfly_richness ~ hedgerow_type + (1|Farm), ziformula = ~hedgerow_type + (1|Farm), family = "nbinom2", data = hoverflies_hedgerow)
+hedgerichness_mixed2.zi <- glmmTMB(hoverfly_richness ~ hedgerow_type + (1|Month) + (1|Farm), ziformula = ~hedgerow_type + (1|Month) + (1|Farm), family = "nbinom2", data = hoverflies_hedgerow)
 # change optimizer to aid convergence
 hedgerichness_mixed2.zib <- update(hedgerichness_mixed2.zi,
                                     control=glmmTMBControl(optimizer=optim,
@@ -1389,7 +1480,7 @@ hedgerichness_mixed2.zib <- update(hedgerichness_mixed2.zi,
 #doesn't converge so ignore
 
 # assess model fit
-AIC(hedgerichness.nb, hedgerichness_mixed.nb2, hedgerichness.zi, hedgerichness_mixed.zib)
+AIC(hedgerichness.nb, hedgerichness_mixed.nb, hedgerichness.zi, hedgerichness_mixed.zib, hedgerichness_mixed2.zib)
 # Mixed effect negative binomial model seems to be the best, but just about
 # random effects also have an effect on the data in the zero inflated model, but negative binomial fits data better
 
@@ -1398,14 +1489,15 @@ AIC(hedgerichness.nb, hedgerichness_mixed.nb2, hedgerichness.zi, hedgerichness_m
 hedgerichness.nb <- glmmTMB(hoverfly_richness ~ hedgerow_type, family = "nbinom2", data = hoverflies_hedgerow)
 
 # likelihood ratio test (fixed effects are held constant)
-anova(hedgerichness_mixed.nb2, hedgerichness.nb)
+anova(hedgerichness_mixed.nb, hedgerichness.nb)
 # indeed, random effects do improve model fit
 
 # see findings using best model- mixed effect negative binomial
-summary(hedgerichness_mixed.nb2)
+summary(hedgerichness_mixed.nb)
 
-# post hoc comparison using ls means
-lsmeans(hedgerichness_mixed.nb2, pairwise ~ hedgerow_type)
+# post hoc comparison using multiple comparisons of means, Tukey contrasts
+hedge_richness_posthoc <- glht(hedgerichness_mixed.nb, linfct = mcp(hedgerow_type = "Tukey"))
+summary(hedge_richness_posthoc)
 
 # found that hedgerow type has a significant effect on hoverfly richness
 # can look at estimates to determine the ecological implications of our findings (need to do exp(estimate) to undo log transformation in each term (intercept and fixed effect) and compare)
@@ -1423,7 +1515,8 @@ lsmeans(hedgerichness_mixed.nb2, pairwise ~ hedgerow_type)
 # Effect of hedgerow type on hoverfly functional diversity----
 
 # hedgerow type vs bodylength fd----
-# ASSUMPTIONS VIOLATED(code not included for practicality, 
+# ASSUMPTIONS DON'T SEEM TO BE HORRIBLY VIOLATED, WE WILL DO NON PARAMETRIC BUT I NEED
+# TO ASK ALICE BECAUSE I COULD DO MIXED EFFECTS OR LINEAR MODEL (code not included for practicality, 
 # but if interested, it is the same as the one used to check hoverfly shannon vs hedgerow type)
 # do non parametric alternative--> Kruskal Wallis Test
 bodylengthfdhedge.mod <- kruskal.test(bodylength_fd ~ hedgerow_type, data=hoverflies_hedgerow)
@@ -1436,7 +1529,8 @@ dunnTest(bodylength_fd ~ hedgerow_type, data=hoverflies_hedgerow, method = "holm
 boxplot(bodylength_fd ~ hedgerow_type, data = hoverflies_hedgerow)
 
 # hedgerow type vs bodylength cwm----
-# ASSUMPTIONS VIOLATED (code not included for practicality, 
+# ASSUMPTIONS DON'T SEEM TO BE HORRIBLY VIOLATED, WE WILL DO NON PARAMETRIC BUT I NEED
+# TO ASK ALICE BECAUSE I COULD DO MIXED EFFECTS OR LINEAR MODEL (code not included for practicality, 
 # but if interested, it is the same as the one used to check hoverfly shannon vs hedgerow type)
 # do non parametric alternative--> Kruskal Wallis Test
 bodylengthcwmhedge.mod <- kruskal.test(bodylength_cwm ~ hedgerow_type, data=hoverflies_hedgerow)
@@ -1449,7 +1543,8 @@ dunnTest(bodylength_cwm ~ hedgerow_type, data=hoverflies_hedgerow, method = "hol
 boxplot(bodylength_cwm ~ hedgerow_type, data = hoverflies_hedgerow)
 
 # hedgerow type vs wing:body ratio fd----
-# ASSUMPTIONS VIOLATED (code not included for practicality, 
+# ASSUMPTIONS DON'T SEEM TO BE HORRIBLY VIOLATED, WE WILL DO NON PARAMETRIC BUT I NEED
+# TO ASK ALICE BECAUSE I COULD DO MIXED EFFECTS OR LINEAR MODEL (code not included for practicality, 
 # but if interested, it is the same as the one used to check hoverfly shannon vs hedgerow type)
 # do non parametric alternative--> Kruskal Wallis Test
 wingbodyratiofdhedge.mod <- kruskal.test(wing_body_ratio_fd ~ hedgerow_type, data=hoverflies_hedgerow)
@@ -1462,7 +1557,8 @@ dunnTest(wing_body_ratio_fd ~ hedgerow_type, data=hoverflies_hedgerow, method = 
 boxplot(wing_body_ratio_fd ~ hedgerow_type, data = hoverflies_hedgerow)
 
 # hedgerow type vs wing:body ratio cwm----
-# ASSUMPTIONS VIOLATED (code not included for practicality, 
+# ASSUMPTIONS DON'T SEEM TO BE HORRIBLY VIOLATED, WE WILL DO NON PARAMETRIC BUT I NEED
+# TO ASK ALICE BECAUSE I COULD DO MIXED EFFECTS OR LINEAR MODEL (code not included for practicality, 
 # but if interested, it is the same as the one used to check hoverfly shannon vs hedgerow type)
 # do non parametric alternative--> Kruskal Wallis Test
 wingbodyratiocwmhedge.mod <- kruskal.test(wing_body_ratio_cwm ~ hedgerow_type, data=hoverflies_hedgerow)
@@ -1475,7 +1571,8 @@ dunnTest(wing_body_ratio_cwm ~ hedgerow_type, data=hoverflies_hedgerow, method =
 boxplot(wing_body_ratio_cwm ~ hedgerow_type, data = hoverflies_hedgerow)
 
 # hedgerow type vs sex fd----
-# ASSUMPTIONS VIOLATED (code not included for practicality, 
+# ASSUMPTIONS DON'T SEEM TO BE HORRIBLY VIOLATED, WE WILL DO NON PARAMETRIC BUT I NEED
+# TO ASK ALICE BECAUSE I COULD DO MIXED EFFECTS OR LINEAR MODEL (code not included for practicality, 
 # but if interested, it is the same as the one used to check hoverfly shannon vs hedgerow type)
 # do non parametric alternative--> Kruskal Wallis Test
 sexfdhedge.mod <- kruskal.test(sex_fd ~ hedgerow_type, data=hoverflies_hedgerow)
@@ -1488,9 +1585,11 @@ dunnTest(sex_fd ~ hedgerow_type, data=hoverflies_hedgerow, method = "holm")
 boxplot(sex_fd ~ hedgerow_type, data = hoverflies_hedgerow)
 
 # hedgerow type vs sex cwm----
-# ASSUMPTIONS VIOLATED (code not included for practicality, 
+# ASSUMPTIONS DON'T SEEM TO BE HORRIBLY VIOLATED, WE WILL DO NON PARAMETRIC BUT I NEED
+# TO ASK ALICE BECAUSE I COULD DO MIXED EFFECTS OR LINEAR MODEL (code not included for practicality, 
 # but if interested, it is the same as the one used to check hoverfly shannon vs hedgerow type)
 # do non parametric alternative--> Kruskal Wallis Test
+
 sexcwmhedge.mod <- kruskal.test(sex_cwm ~ hedgerow_type, data=hoverflies_hedgerow)
 sexcwmhedge.mod
 
@@ -1553,7 +1652,7 @@ legend("topright", title="Hedgerow Type",
        c("Well Managed","Overgrown", "Overtrimmed"), fill=c("darkorchid1", "darkslategray1", "bisque1"), horiz=FALSE, cex=.9)
 
 # save plot
-png("your_filepath/hedgerow_nmds_basic.png", width=6, height=5, units = "in", res = 300)
+png("Data/Figures/hedgerow_nmds_basic.png", width=6, height=5, units = "in", res = 300)
 ordiplot(hedge.NMDS)
 ordiellipse(hedge.NMDS, hedgerow_species$hedgerow_type, label = FALSE, 
             col=c("darkorchid1", "darkslategray1"), 
@@ -1621,7 +1720,7 @@ for(r in levels(nmds.scores1$hedgerow_type)){
                        labels = c("Well Managed","Overgrown", "Overtrimmed"), # adjusting legend labels
                        values = c(17, 15, 3))) # customising shapes
 # save plot
-ggsave(filename = "your_filepath/hedgerow_NMDS.png", hedgerow_NMDS_plot, device = "png")
+ggsave(filename = "Data/Figures/hedgerow_NMDS.png", hedgerow_NMDS_plot, device = "png")
 
 # data analysis
 # using a PERMANOVA to test the differences in community composition
@@ -1698,7 +1797,7 @@ hoverfly_count <- hoverfly_count [-36,]
           panel.grid = element_blank(),                                          
           plot.margin = unit(c(1,1,1,1), units = , "cm")))
 # save plot
-ggsave(filename = "your_filepath/hoverfly_barplot.png", hoverfly_barplot, device = "png")
+ggsave(filename = "Data/Figures/hoverfly_barplot.png", hoverfly_barplot, device = "png")
 
 # plots for hoverfly shannon vs floral shannon, floral abundance and hedgerow type----
 # hoverfly shannon vs floral shannon
@@ -1732,15 +1831,24 @@ ggsave(filename = "your_filepath/hoverfly_barplot.png", hoverfly_barplot, device
           plot.margin = unit(c(1,1,1,1), units = , "cm")))
 
 # hoverfly shannon vs hedgerow_type
-(shannon_boxplot <- ggplot(hoverflies_hedgerow, aes(hedgerow_type, hoverfly_shannon)) + 
-    geom_boxplot(aes(fill = hedgerow_type)) +
-    theme_bw() +
-    scale_fill_manual(values = c("#FFC125", "#006400", "#8B4513")) + # Adding custom colours
+# calculate medians and 95% CI
+shannon_median <- groupwiseMean(hoverfly_shannon ~ hedgerow_type,
+                                  data = hoverflies_hedgerow,
+                                  bca=FALSE, percentile=TRUE)
+
+shannon_median
+
+# plot
+(shannon_barplot <- ggplot(shannon_median, aes(hedgerow_type, Median, color = hedgerow_type)) + 
+    geom_bar(aes(fill = hedgerow_type), position = position_dodge(), stat = "identity") +
+    geom_errorbar(aes(ymin  =  Percentile.lower, ymax  =  Percentile.upper), width =  0.2, linewidth  =  0.5, colour = "black") +
     scale_colour_manual(values = c("#FFC125", "#006400", "#8B4513")) + # Adding custom colours
+    scale_fill_manual(values = c("#FFC125", "#006400", "#8B4513")) + # Adding custom colours
     scale_x_discrete(labels= c("Well-managed", "Overgrown", "Overtrimmed")) +
+    theme_bw() +
+    ylim(0,2.5) +
     ylab("Hoverfly Shannon Diversity\n") +                             
     xlab("\nHedgerow Type")  +
-    ylim(0, 2.5) +
     theme(axis.line = element_line(),
           axis.text.x = element_text(size = 12),
           axis.text.y = element_text(size = 12),
@@ -1748,15 +1856,15 @@ ggsave(filename = "your_filepath/hoverfly_barplot.png", hoverfly_barplot, device
           axis.title = element_text(size = 14, face = "bold"),                     
           panel.grid = element_blank(), # Removing the background grid lines               
           plot.margin = unit(c(1,1,1,1), units = , "cm"), # Adding a margin
-          legend.position = "none")) # Removing legend - not needed with only 2 factorsg legend - not needed with only 2 factors
+          legend.position = "none")) # Removing legend - not needed with only 3 factors legend - not needed with only 3 factors
 
 # combine all plots
-shannon_combined <- (shannon_plot|shannon_plot2)/shannon_boxplot + plot_annotation(tag_levels = "A") & 
+shannon_combined <- (shannon_plot|shannon_plot2)/shannon_barplot + plot_annotation(tag_levels = "A") & 
                     theme(plot.tag = element_text(face = "bold"))
 shannon_combined
 
 # save plot
-ggsave(filename = "your_filepath/hoverfly_shannon.png", shannon_combined, device = "png")
+ggsave(filename = "Data/Figures/hoverfly_shannon.png", shannon_combined, device = "png")
 
 # plots for hoverfly abundance and richness vs flower diversity, flower abundance, hedgerow type----
 # hoverfly abundance vs floral shannon
@@ -1785,19 +1893,29 @@ ggsave(filename = "your_filepath/hoverfly_shannon.png", shannon_combined, device
           axis.text.x = element_text(size = 12),     
           axis.text.y = element_text(size = 12),
           panel.border = element_blank(),
-          axis.title = element_text(size = 14, face = "bold"),                        
+          axis.title = element_text(size = 14, face = "bold"), 
           panel.grid = element_blank(),                                   # Removing the background grid lines               
           plot.margin = unit(c(1,1,1,1), units = , "cm")))
 
 # hoverfly abundance vs hedgerow_type
-(abundance_boxplot <- ggplot(hoverflies_hedgerow, aes(hedgerow_type, hoverfly_abundance)) + 
-    geom_boxplot(aes(fill = hedgerow_type)) +
-    theme_bw() +
-    scale_fill_manual(values = c("#FFC125", "#006400", "#8B4513")) + # Adding custom colours
+# calculate means and 95% CI
+abundance_mean <- groupwiseMean(hoverfly_abundance ~ hedgerow_type,
+                                  data = hoverflies_hedgerow,
+                                  bca=FALSE, percentile=TRUE)
+
+abundance_mean
+
+# plot
+(abundance_barplot <- ggplot(abundance_mean, aes(hedgerow_type, Mean, color = hedgerow_type)) + 
+    geom_bar(aes(fill = hedgerow_type), position = position_dodge(), stat = "identity") +
+    geom_errorbar(aes(ymin  =  Percentile.lower, ymax  =  Percentile.upper), width =  0.2, linewidth  =  0.5, colour = "black") +
     scale_colour_manual(values = c("#FFC125", "#006400", "#8B4513")) + # Adding custom colours
+    scale_fill_manual(values = c("#FFC125", "#006400", "#8B4513")) + # Adding custom colours
     scale_x_discrete(labels= c("Well-managed", "Overgrown", "Overtrimmed")) +
+    theme_bw() +
     ylab("Hoverfly Abundance\n") +                             
     xlab("\nHedgerow Type")  +
+    ylim(0,50) +
     theme(axis.line = element_line(),
           axis.text.x = element_text(size = 10),
           axis.text.y = element_text(size = 12),
@@ -1805,7 +1923,7 @@ ggsave(filename = "your_filepath/hoverfly_shannon.png", shannon_combined, device
           axis.title = element_text(size = 14, face = "bold"),                     
           panel.grid = element_blank(), # Removing the background grid lines               
           plot.margin = unit(c(1,1,1,1), units = , "cm"), # Adding a margin
-          legend.position = "none")) # Removing legend - not needed with only 2 factorsg legend - not needed with only 2 factors
+          legend.position = "none")) # Removing legend - not needed with only 3 factors legend - not needed with only 3 factors
 
 # hoverfly richness vs floral shannon
 (richness_plot <- ggplot(hoverflies, aes (flower_shannon, hoverfly_richness)) +
@@ -1838,29 +1956,41 @@ ggsave(filename = "your_filepath/hoverfly_shannon.png", shannon_combined, device
           plot.margin = unit(c(1,1,1,1), units = , "cm")))
 
 # hoverfly richness vs hedgerow_type
-(richness_boxplot <- ggplot(hoverflies_hedgerow, aes(hedgerow_type, hoverfly_richness)) + 
-    geom_boxplot(aes(fill = hedgerow_type)) +
-    theme_bw() +
-    scale_fill_manual(values = c("#FFC125", "#006400", "#8B4513")) + # Adding custom colours
+# calculate means and 95% CI
+richness_mean <- groupwiseMean(hoverfly_richness ~ hedgerow_type,
+                                    data = hoverflies_hedgerow,
+                                    bca=FALSE, percentile=TRUE)
+
+richness_mean
+
+# plot
+(richness_barplot <- ggplot(richness_mean, aes(hedgerow_type, Mean, color = hedgerow_type)) + 
+    geom_bar(aes(fill = hedgerow_type), position = position_dodge(), stat = "identity") +
+    geom_errorbar(aes(ymin  =  Percentile.lower, ymax  =  Percentile.upper), width =  0.2, linewidth  =  0.5, colour = "black") +
     scale_colour_manual(values = c("#FFC125", "#006400", "#8B4513")) + # Adding custom colours
+    scale_fill_manual(values = c("#FFC125", "#006400", "#8B4513")) + # Adding custom colours
     scale_x_discrete(labels= c("Well-managed", "Overgrown", "Overtrimmed")) +
+    theme_bw() +
     ylab("Hoverfly Richness\n") +                             
     xlab("\nHedgerow Type")  +
+    labs(title="*") +
+    ylim(0,8) +
     theme(axis.line = element_line(),
           axis.text.x = element_text(size = 10),
           axis.text.y = element_text(size = 12),
           panel.border = element_blank(),
-          axis.title = element_text(size = 14, face = "bold"),                     
+          axis.title = element_text(size = 14, face = "bold"),       
+          plot.title = element_text(size = 24, hjust = 0.5, face = "bold"),
           panel.grid = element_blank(), # Removing the background grid lines               
           plot.margin = unit(c(1,1,1,1), units = , "cm"), # Adding a margin
-          legend.position = "none")) # Removing legend - not needed with only 2 factorsg legend - not needed with only 2 factors
+          legend.position = "none")) # Removing legend - not needed with only 3 factors legend - not needed with only 3 factors
 
-richabundance_combined <- abundance_plot + abundance_plot2 + abundance_boxplot + richness_plot + richness_plot2 + richness_boxplot +
+richabundance_combined <- abundance_plot + abundance_plot2 + abundance_barplot + richness_plot + richness_plot2 + richness_barplot +
                           plot_annotation(tag_levels = "A") & theme(plot.tag = element_text(face = "bold"))
 richabundance_combined
                           
 # save plot
-ggsave(filename = "your_filepath/hoverfly_richabundance.png", richabundance_combined, device = "png")
+ggsave(filename = "Data/Figures/hoverfly_richabundance.png", richabundance_combined, device = "png")
 
 
 
@@ -1959,7 +2089,7 @@ fd_combined <- bodycwm_plot + wingcwm_plot + sexcwm_plot + bodyfd_plot + wingfd_
 fd_combined
 
 # save plot
-ggsave(filename = "your_filepath/hoverfly_fd.png", fd_combined, device = "png")
+ggsave(filename = "Data/Figures/hoverfly_fd.png", fd_combined, device = "png")
 
 
 # plots for functional diversity indices for all traits vs hedgerow type----
@@ -1988,7 +2118,7 @@ bodyfd_median
           axis.title = element_text(size = 14, face = "bold"),                     
           panel.grid = element_blank(), # Removing the background grid lines               
           plot.margin = unit(c(1,1,1,1), units = , "cm"), # Adding a margin
-          legend.position = "none")) # Removing legend - not needed with only 2 factorsg legend - not needed with only 2 factors
+          legend.position = "none")) # Removing legend - not needed with only 3 factors legend - not needed with only 3 factors
 
 (bodyfd_boxplot <- ggplot(hoverflies_hedgerow, aes(hedgerow_type, bodylength_fd)) + 
     geom_boxplot(aes(fill = hedgerow_type)) +
@@ -2005,7 +2135,7 @@ bodyfd_median
           axis.title = element_text(size = 14, face = "bold"),                     
           panel.grid = element_blank(), # Removing the background grid lines               
           plot.margin = unit(c(1,1,1,1), units = , "cm"), # Adding a margin
-          legend.position = "none")) # Removing legend - not needed with only 2 factorsg legend - not needed with only 2 factors
+          legend.position = "none")) # Removing legend - not needed with only 3 factors legend - not needed with only 3 factors
 
 (bodyfd_barplot <- ggplot(bodyfd_median, aes(hedgerow_type, Median, color = hedgerow_type)) + 
     geom_bar(aes(fill = hedgerow_type), position = position_dodge(), stat = "identity") +
@@ -2024,7 +2154,7 @@ bodyfd_median
           axis.title = element_text(size = 14, face = "bold"),                     
           panel.grid = element_blank(), # Removing the background grid lines               
           plot.margin = unit(c(1,1,1,1), units = , "cm"), # Adding a margin
-          legend.position = "none")) # Removing legend - not needed with only 2 factorsg legend - not needed with only 2 factors
+          legend.position = "none")) # Removing legend - not needed with only 3 factors legend - not needed with only 3 factors
 
 # body length cwm vs hedgerow type
 # calculate medians and 95% CI
@@ -2052,7 +2182,7 @@ bodycwm_median
           axis.title = element_text(size = 14, face = "bold"),                     
           panel.grid = element_blank(), # Removing the background grid lines               
           plot.margin = unit(c(1,1,1,1), units = , "cm"), # Adding a margin
-          legend.position = "none")) # Removing legend - not needed with only 2 factorsg legend - not needed with only 2 factors
+          legend.position = "none")) # Removing legend - not needed with only 3 factors legend - not needed with only 3 factors
 
 # wing:body ratio fd vs hedgerow type
 # calculate medians and 95% CI
@@ -2079,7 +2209,7 @@ wingfd_median
           axis.title = element_text(size = 14, face = "bold"),                     
           panel.grid = element_blank(), # Removing the background grid lines               
           plot.margin = unit(c(1,1,1,1), units = , "cm"), # Adding a margin
-          legend.position = "none")) # Removing legend - not needed with only 2 factorsg legend - not needed with only 2 factors
+          legend.position = "none")) # Removing legend - not needed with only 3 factors legend - not needed with only 3 factors
 
 # wing:body ratio fd vs hedgerow type
 # calculate medians and 95% CI
@@ -2107,7 +2237,7 @@ wingcwm_median
           axis.title = element_text(size = 14, face = "bold"),                     
           panel.grid = element_blank(), # Removing the background grid lines               
           plot.margin = unit(c(1,1,1,1), units = , "cm"), # Adding a margin
-          legend.position = "none")) # Removing legend - not needed with only 2 factorsg legend - not needed with only 2 factors
+          legend.position = "none")) # Removing legend - not needed with only 3 factors legend - not needed with only 3 factors
 
 # sex fd vs hedgerow type
 # calculate medians and 95% CI
@@ -2135,7 +2265,7 @@ sexfd_median
           axis.title = element_text(size = 14, face = "bold"),                     
           panel.grid = element_blank(), # Removing the background grid lines               
           plot.margin = unit(c(1,1,1,1), units = , "cm"), # Adding a margin
-          legend.position = "none")) # Removing legend - not needed with only 2 factorsg legend - not needed with only 2 factors
+          legend.position = "none")) # Removing legend - not needed with only 3 factors legend - not needed with only 3 factors
 
 # sex cwm vs hedgerow type
 # calculate medians and 95% CI
@@ -2163,12 +2293,22 @@ sexcwm_median
           axis.title = element_text(size = 14, face = "bold"),                     
           panel.grid = element_blank(), # Removing the background grid lines               
           plot.margin = unit(c(1,1,1,1), units = , "cm"), # Adding a margin
-          legend.position = "none")) # Removing legend - not needed with only 2 factorsg legend - not needed with only 2 factors
+          legend.position = "none")) # Removing legend - not needed with only 3 factors legend - not needed with only 3 factors
 
 hedgefd_combined <- bodycwm_barplot + wingcwm_barplot + sexcwm_barplot + bodyfd_barplot + wingfd_barplot + sexfd_barplot + 
   plot_annotation(tag_levels = "A") & theme(plot.tag = element_text(face = "bold"))
 hedgefd_combined
 
 # save plot
-ggsave(filename = "your_filepath/hoverflyhedege_fd.png", hedgefd_combined, device = "png")
+ggsave(filename = "Data/Figures/hoverflyhedege_fd.png", hedgefd_combined, device = "png")
+
+# make composite NMDS plot
+nmds_combined <-  flower_NMDS_plot + hedgerow_NMDS_plot +  
+  plot_annotation(tag_levels = "A") & theme(plot.tag = element_text(face = "bold"))
+nmds_combined
+
+# save plot
+ggsave(filename = "Data/Figures/nmds.png", nmds_combined, device = "png")
+
+# EXPLAIN EVERYTHING I HAVE DONE IN R!!!!!----
 

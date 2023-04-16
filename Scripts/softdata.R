@@ -1,5 +1,5 @@
 # set working directory----
-setwd("your_filepath")
+setwd("/Users/rayrubia/Desktop/Dissertation")
 
 # load libraries----
 library(tidyverse)
