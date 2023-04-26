@@ -8,5 +8,6 @@ Here you can find all of the figures generated from our analyses:
 - **hoverflyhedgefd.png** is a composite plot showing the effect of hedgerow type on the different functional diversity indices for each trait
 - **hoverflyrichabundance.png** is a composite plot showing the effect of flower diversity, flower abundance and hedgerow type on hoverfly richness and abundance
 - **hoverflyspecies.png** is a barplot of the total abundance of different hoverfly species found in this study
+- **zi.png** is a composite histogram plot showing zero-inflation of our data when comparing hoverfly abundance and richness to floral resources and hedgerow type
 
 
