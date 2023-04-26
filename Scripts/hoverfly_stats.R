@@ -599,7 +599,7 @@ shannonrichness_mixed.nb2 <- glmmTMB(hoverfly_richness ~ flower_shannon + (1|Mon
 shannonrichness_mixed.nb3 <- glmmTMB(hoverfly_richness ~ flower_shannon + (1|Month) + (1|Farm), family = "nbinom2", data = hoverflies)
 
 # assess model fit
-AIC(shannonrichness_mixed.nb1, shannonrichness_mixed.nb2, shannonrichness_mixed.nb3)
+AIC(shannonrichness.nb, shannonrichness.zib, shannonrichness_mixed.nb1, shannonrichness_mixed.nb2, shannonrichness_mixed.nb3)
 # Mixed effect negative binomial model seems to be the best when including Month and hedgerow as random effects 
 
 # code negative binomial model using glmmTMB rather than glm.nb just to carry out likelihood ratio test
@@ -1049,28 +1049,6 @@ permutest(flower.dispersion)
 # can also visually assess the assumptions
 plot(flower.dispersion, hull = FALSE, ellipse=TRUE) # remove hulls and add ellipses
 
-
-# simper analysis
-# this is a SIMilarity PERcentage analysis and compares community differences 
-# and reports what species (orders in this scenario)are driving those differences.
-
-flower_simper <- with(hoverflies_species[,c(1,2,3,4,5,6,42)], simper(as.matrix(hoverflies_species[,7:41]), flower_diversity, permutations = 100))
-# with argument indicates what grouping variables to use to conduct the analysis 
-# the number of permutations required to carry out the analysis
-
-# see most influential species (orders in this case) contributing to community differences
-flower_simper
-
-# a more detailed summary showing the contributions of all species (or orders)
-summary(flower_simper)
-
-# shows species driving differences in community composition between different distances
-
-# looks like most abundant species (marmalade, migrant, common snout) dominate low diversity
-# plant communities. High diversity plant communities allow for other species of hoverflies 
-# to come in and use the resources, however, both communities are dominated by these abundant 
-# hoverflies and they are not significantly different.
-
 # RQ2 Analysis----
 # How does farmland hedgerow quality affect hoverfly communities?
 
@@ -1294,7 +1272,7 @@ hedgeabundance_mixed2.zi <- glmmTMB(hoverfly_abundance ~ hedgerow_type + (1|Mont
 
 
 # assess model fit
-AIC(hedgeabundance.nb, hedgeabundance_mixed.nb, hedgeabundance_mixed.zi, hedgeabundance_mixed2.zib)
+AIC(hedgeabundance.nb, hedgeabundance_mixed.nb, hedgeabundance_mixed.zi, hedgeabundance_mixed2.zi)
 # Mixed effect negative binomial model seems to be the best. 
 # random effects also have an effect on the data in the zero inflated model, but negative binomial fits data better
 
@@ -1477,7 +1455,6 @@ hedgerichness_mixed2.zi <- glmmTMB(hoverfly_richness ~ hedgerow_type + (1|Month)
 hedgerichness_mixed2.zib <- update(hedgerichness_mixed2.zi,
                                     control=glmmTMBControl(optimizer=optim,
                                                            optArgs=list(method="BFGS")))
-#doesn't converge so ignore
 
 # assess model fit
 AIC(hedgerichness.nb, hedgerichness_mixed.nb, hedgerichness.zi, hedgerichness_mixed.zib, hedgerichness_mixed2.zib)
@@ -1749,29 +1726,6 @@ permutest(hedgerow.dispersion)
 
 # can also visually assess the assumptions
 plot(hedgerow.dispersion, hull = FALSE, ellipse=TRUE) # remove hulls and add ellipses
-
-
-# simper analysis
-# this is a SIMilarity PERcentage analysis and compares community differences 
-# and reports what species (orders in this scenario)are driving those differences.
-
-hedgerow_simper <- with(hedgerow_species[,c(1,2,3,4,40)], simper(as.matrix(hedgerow_species[,5:39]), hedgerow_type, permutations = 100))
-# with argument indicates what grouping variables to use to conduct the analysis 
-# the number of permutations required to carry out the analysis
-
-# see most influential species (orders in this case) contributing to community differences
-hedgerow_simper
-
-# a more detailed summary showing the contributions of all species (or orders)
-summary(hedgerow_simper)
-
-# shows species driving differences in community composition between different distances
-
-# Most abundant species (Episyrphus balteatus, Eupeodes corollae, Neoascia podagrica)
-# dominate all hedgerows equally and are not affected by hedgerow quality. However, rarer
-# species such as Helophilus pendulus appear to have hedgerow type preferences.
-# Different hedgerow preferences by rarer species, but do not affect the overall community
-
 
 # data visualization----
 # section for all code to produce dissertation figures
@@ -2310,5 +2264,47 @@ nmds_combined
 # save plot
 ggsave(filename = "Data/Figures/nmds.png", nmds_combined, device = "png")
 
-# EXPLAIN EVERYTHING I HAVE DONE IN R!!!!!----
+# plot histograms showing zero inflation----
+# for hoverfy abundance vs flower
+(hist_abundance <- ggplot(hoverflies, aes(x = hoverfly_abundance)) +
+   geom_histogram(colour = "black", fill = "#FFC125", bins = 10) +
+   theme_classic() +
+   ylab("Frequency\n") +
+   xlab("\nHoverfly abundance") +  
+   theme(axis.text = element_text(size = 12),
+         axis.title = element_text(size = 14, face = "bold")))
 
+# for hoverfly richness vs flower
+(hist_richness <- ggplot(hoverflies, aes(x = hoverfly_richness)) +
+    geom_histogram(colour = "black", fill = "#FFC125", bins = 10) +
+    theme_classic() +
+    ylab("Frequency\n") +
+    xlab("\nHoverfly richness") +  
+    theme(axis.text = element_text(size = 12),
+          axis.title = element_text(size = 14, face = "bold")))
+# for hoverfy abundance vs hedge
+(hist_hedgeabundance <- ggplot(hoverflies_hedgerow, aes(x = hoverfly_abundance)) +
+    geom_histogram(colour = "black", fill = "#FFC125", bins = 10) +
+    theme_classic() +
+    ylab("Frequency\n") +
+    xlab("\nHoverfly abundance") +  
+    theme(axis.text = element_text(size = 12),
+          axis.title = element_text(size = 14, face = "bold")))
+
+# for hoverfly richness vs hedge
+(hist_hedgerichness <- ggplot(hoverflies_hedgerow, aes(x = hoverfly_richness)) +
+    geom_histogram(colour = "black", fill = "#FFC125", bins = 10) +
+    theme_classic() +
+    ylab("Frequency\n") +
+    xlab("\nHoverfly richness") +  
+    theme(axis.text = element_text(size = 12),
+          axis.title = element_text(size = 14, face = "bold")))
+
+
+# make composite plot
+zi_combined <-  hist_abundance + hist_richness + hist_hedgeabundance + hist_hedgerichness +
+  plot_annotation(tag_levels = "A") & theme(plot.tag = element_text(face = "bold"))
+zi_combined
+
+# save plot
+ggsave(filename = "Data/Figures/zi.png", zi_combined, device = "png")
